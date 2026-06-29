@@ -1,0 +1,22 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { AppShell } from "@/components/shell/AppShell";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { usePortfolioStore } from "@/store/portfolioStore";
+
+const accountColor = ["var(--chart-blue)", "var(--profit-green)", "var(--chart-orange)", "var(--chart-cyan)"];
+export default function AccountsPage() {
+  const { holdings } = usePortfolioStore();
+  const [query, setQuery] = useState("");
+  const accounts = useMemo(() => Object.values(holdings.reduce<Record<string, { name: string; balance: number; assets: Set<string> }>>((map, holding) => { const key = holding.account; const current = map[key] ?? { name: key, balance: 0, assets: new Set<string>() }; current.balance += holding.investedAmount ?? holding.quantity * holding.avgBuyPrice; current.assets.add(holding.symbol); map[key] = current; return map; }, {})).map((account) => ({ ...account, assets: account.assets.size })), [holdings]);
+  const total = accounts.reduce((sum, account) => sum + account.balance, 0);
+  const topAccount = [...accounts].sort((a, b) => b.balance - a.balance)[0];
+  const filtered = accounts.filter((account) => account.name.toLowerCase().includes(query.trim().toLowerCase()));
+  return <AppShell title="Contas">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Patrimônio acompanhado" value={total} changeLabel={`${accounts.length} contas locais`} changeVariant="neutral" /><MetricCard label="Maior custódia" value={topAccount?.balance ?? 0} changeLabel={topAccount?.name ?? "Sem contas"} changeVariant="success" /><MetricCard label="Ativos em custódia" value={new Set(holdings.map((holding) => holding.symbol)).size} valuePrefix="" changeLabel="Moedas adicionadas" changeVariant="neutral" /><MetricCard label="Posições" value={holdings.length} valuePrefix="" changeLabel="Dados sincronizados" changeVariant="success" /></section>
+    <GlassCard className="overflow-hidden"><div className="flex flex-col gap-4 border-b border-[var(--card-border)] p-4 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-semibold">Contas e custódia</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Contas definidas ao registrar cada posição.</p></div><label className="flex h-9 items-center gap-2 rounded-lg border border-[var(--card-border)] bg-black/10 px-3 text-sm text-[var(--text-muted)] sm:w-56"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none" placeholder="Buscar contas" /></label></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-black/10 text-left text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"><tr className="border-b border-[var(--card-border)]"><th className="px-4 py-3 font-medium">Conta</th><th className="px-4 py-3 font-medium">Tipo</th><th className="px-4 py-3 font-medium">Ativos</th><th className="px-4 py-3 text-right font-medium">Alocação</th><th className="px-4 py-3 text-right font-medium">Saldo investido</th></tr></thead><tbody>{filtered.map((account, index) => <tr key={account.name} className="border-b border-[var(--card-border)] transition-colors hover:bg-white/[0.025] last:border-b-0"><td className="px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-8 place-items-center rounded-lg bg-white/[0.07] text-xs font-semibold" style={{ color: accountColor[index % accountColor.length] }}>{account.name.slice(0, 1)}</span><span className="font-medium">{account.name}</span></div></td><td className="px-4 py-3"><span className="rounded-full border border-[var(--card-border)] px-2 py-1 text-xs text-[var(--text-muted)]">Custódia manual</span></td><td className="display-mono px-4 py-3">{account.assets}</td><td className="display-mono px-4 py-3 text-right text-[var(--text-muted)]">{total > 0 ? ((account.balance / total) * 100).toFixed(1) : "0.0"}%</td><td className="display-mono px-4 py-3 text-right font-medium">${account.balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td></tr>)}</tbody></table></div><div className="flex justify-between border-t border-[var(--card-border)] px-4 py-3 text-xs text-[var(--text-muted)]"><span>{filtered.length} contas exibidas</span><span>Sem conexão externa configurada</span></div></GlassCard>
+  </AppShell>;
+}

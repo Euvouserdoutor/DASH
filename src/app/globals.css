@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #0b0b0c;
+    --bg-secondary: #111111;
+    --card-bg: #121212;
+    --card-border: #292929;
+    --text-primary: #f4f4f5;
+    --text-muted: #a1a1aa;
+    --text-faint: #71717a;
+    --purple-neon: #7c3aed;
+    --accent-violet-blue: #3b82f6;
+    --profit-green: #35d07f;
+    --loss-red: #ff5277;
+    --warning-amber: #f6a72a;
+    --chart-blue: #3478f6;
+    --chart-pink: #f2348b;
+    --chart-cyan: #42c6d6;
+    --chart-orange: #ff7a33;
+    --glass-blur: 0px;
+    --radius-lg: 14px;
+    --shadow-purple-glow: 0 1px 2px rgba(0, 0, 0, 0.32);
+  }
+
+  html,
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .display-mono {
+    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}
+
+@layer utilities {
+  .dashboard-shell {
+    min-height: 100dvh;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .glass-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-purple-glow);
+  }
+
+  .square-panel {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .neon-glow {
+    box-shadow: var(--shadow-purple-glow);
+  }
+
+  .subtle-border {
+    border: 1px solid var(--card-border);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
