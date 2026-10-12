@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
           prices: fallbackPrices,
           source: "fallback",
           warning: "prices_rate_limited",
-          message: "Live prices are rate limited. Showing local fallback prices.",
+          message: "Live prices are rate limited. No estimated prices are displayed.",
         },
         { status: 200 },
       );
