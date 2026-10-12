@@ -12,6 +12,7 @@ import type { MarketAsset } from "@/types/market";
 type InsightHolding = {
   symbol: string;
   value: number;
+  pnlValue: number;
   allocationPct: number;
   change24h: number;
 };
