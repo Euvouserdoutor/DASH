@@ -29,9 +29,7 @@ export function Sidebar() {
     }, {})).sort((a, b) => b.value - a.value).slice(0, 4),
     [holdings],
   );
-  const displayedAccounts = accounts.length > 0 ? accounts : [
-    { label: "Bitcoin", value: 12480 }, { label: "Ethereum", value: 9870 }, { label: "Solana", value: -2500 }, { label: "USDC", value: 500 },
-  ];
+  const displayedAccounts = accounts;
 
   return (
     <aside className="flex h-full w-full flex-col bg-[var(--bg-secondary)] p-2">
@@ -74,6 +72,7 @@ export function Sidebar() {
         <span className="text-base leading-none">+</span>
       </div>
       <div className="mt-3 space-y-4 px-3 text-sm">
+        {displayedAccounts.length === 0 ? <p className="text-xs text-[var(--text-muted)]">Nenhuma posição registrada</p> : null}
         {displayedAccounts.map((account, index) => (
           <div key={account.label} className="flex items-center justify-between gap-3">
             <span className="flex min-w-0 items-center gap-2">
