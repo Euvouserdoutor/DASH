@@ -158,3 +158,28 @@ export async function getAssetChart(id: string, days: "1" | "7" | "30" = "1"): P
   setCache(cacheKey, points, 300_000);
   return points;
 }
+
+
+type CoinSearchResponse = {
+  coins?: Array<{ id: string; symbol: string; name: string; thumb?: string }>;
+};
+
+export async function searchCoinGecko(query: string, limit = 15): Promise<MarketAsset[]> {
+  const value = query.trim().slice(0, 80);
+  if (!value) return getMarketAssets();
+  const cached = getCache<MarketAsset[]>("coingecko:search:" + value.toLowerCase());
+  if (cached) return cached.slice(0, limit);
+  const response = await coingeckoFetch<CoinSearchResponse>(
+    "/search?query=" + encodeURIComponent(value), 120,
+  );
+  const coins = (response.coins ?? []).slice(0, 25).map((coin) => ({
+    id: coin.id,
+    symbol: coin.symbol.toUpperCase(),
+    name: coin.name,
+    imageUrl: coin.thumb,
+    currentPrice: 0,
+    priceChange24hPct: 0,
+  }));
+  setCache("coingecko:search:" + value.toLowerCase(), coins, 120_000);
+  return coins.slice(0, limit);
+}
