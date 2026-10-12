@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MetricBadge } from "@/components/ui/MetricBadge";
 import { fmtCurrency } from "@/lib/formatters";
+import { getActiveCloudUserId } from "@/lib/client/dash-cloud-sync";
 
 type PortfolioTrendCardProps = {
   totalBalance: number;
@@ -20,7 +21,9 @@ const STORAGE_KEY = "dash.portfolio.timeline.v1";
 function readSnapshots(): Snapshot[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const userId = getActiveCloudUserId();
+    if (!userId) return [];
+    const raw = window.localStorage.getItem(STORAGE_KEY + "." + userId);
     const parsed = raw ? (JSON.parse(raw) as Snapshot[]) : [];
     return Array.isArray(parsed)
       ? parsed.filter((item) => item && typeof item.balance === "number" && typeof item.at === "string")
@@ -52,7 +55,8 @@ export function PortfolioTrendCard({ totalBalance }: PortfolioTrendCardProps) {
 
     const next = [...current, { at: new Date().toISOString(), balance: totalBalance }].slice(-180);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const userId = getActiveCloudUserId();
+      if (userId) window.localStorage.setItem(STORAGE_KEY + "." + userId, JSON.stringify(next));
     } catch {
       // Storage can be unavailable in private mode or restricted browser contexts.
     }
