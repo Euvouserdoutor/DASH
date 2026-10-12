@@ -19,6 +19,13 @@ export function MarketRegimeCard() {
   const variant = regime === "Risk-On" ? "success" : regime === "Risk-Off" ? "danger" : "warning";
   const label = regime === "Risk-On" ? "Risco ligado" : regime === "Risk-Off" ? "Risco desligado" : "Neutro";
 
+  if (!assets.length) return (
+    <GlassCard className="p-4">
+      <h3 className="text-base font-medium">Regime de mercado</h3>
+      <p className="mt-3 text-sm text-[var(--text-muted)]">Sem dados suficientes do mercado para classificar o regime atual.</p>
+    </GlassCard>
+  );
+
   return (
     <GlassCard className="p-4">
       <div className="flex items-start justify-between gap-3">
