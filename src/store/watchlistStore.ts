@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { queueCloudWrite } from "@/lib/client/dash-cloud-sync";
 
 export type WatchlistAsset = {
   id: string;
@@ -8,13 +9,11 @@ export type WatchlistAsset = {
   name: string;
 };
 
-const STORAGE_KEY = "dash.watchlist.v1";
 type Snapshot = { assets: WatchlistAsset[] };
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
 let state: Snapshot = { assets: [] };
-let hydrated = false;
 const SERVER_SNAPSHOT: Snapshot = { assets: [] };
 
 function emit() {
@@ -34,37 +33,22 @@ function getServerSnapshot(): Snapshot {
   return SERVER_SNAPSHOT;
 }
 
-function hydrate() {
-  if (hydrated || typeof window === "undefined") return;
-  hydrated = true;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as WatchlistAsset[]) : [];
-    state = {
-      assets: Array.isArray(parsed)
-        ? parsed
-            .filter((asset) => asset && typeof asset === "object")
-            .map((asset) => ({
-              id: String(asset.id ?? "").trim().toLowerCase(),
-              symbol: String(asset.symbol ?? "").trim().toUpperCase(),
-              name: String(asset.name ?? "").trim(),
-            }))
-            .filter((asset) => asset.id && asset.symbol)
-        : [],
-    };
-  } catch {
-    state = { assets: [] };
-  }
+function normalizeAssets(payload: unknown): WatchlistAsset[] {
+  if (!Array.isArray(payload)) return [];
+  return payload.filter((item) => item && typeof item === "object").map((item) => ({
+    id: String(item.id ?? "").trim().toLowerCase(),
+    symbol: String(item.symbol ?? "").trim().toUpperCase(),
+    name: String(item.name ?? "").trim(),
+  })).filter((item) => item.id && item.symbol);
 }
-
 function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.assets));
-  } catch {
-    // Storage can be unavailable in private mode or restricted browser contexts.
-  }
+  queueCloudWrite("watchlist", state.assets);
 }
+export function loadWatchlistFromCloud(payload: unknown) {
+  state = { assets: normalizeAssets(payload) };
+  emit();
+}
+export function getWatchlistCloudPayload() { return state.assets; }
 
 function setAssets(assets: WatchlistAsset[]) {
   state = { assets };
@@ -73,7 +57,6 @@ function setAssets(assets: WatchlistAsset[]) {
 }
 
 export function useWatchlistStore() {
-  hydrate();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const add = (asset: WatchlistAsset) => {
