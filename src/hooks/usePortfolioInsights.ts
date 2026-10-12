@@ -32,13 +32,18 @@ export function usePortfolioInsights() {
   const { holdings } = usePortfolioStore();
   const { assets: watchlist } = useWatchlistStore();
   const [marketMap, setMarketMap] = useState<Record<string, MarketAsset>>({});
+  const idsParam = useMemo(() => [...new Set(holdings.map((item) => item.assetId.trim().toLowerCase()).filter(Boolean))].sort().join(","), [holdings]);
 
   useEffect(() => {
     let cancelled = false;
+    if (!idsParam) {
+      setMarketMap({});
+      return;
+    }
 
     const load = async () => {
       try {
-        const res = await fetch("/api/market", { cache: "no-store" });
+        const res = await fetch("/api/market?ids=" + encodeURIComponent(idsParam), { cache: "no-store" });
         if (!res.ok) return;
 
         const data = (await res.json()) as { assets?: MarketAsset[] };
@@ -51,7 +56,7 @@ export function usePortfolioInsights() {
         }
         setMarketMap(map);
       } catch {
-        // keep fallback
+        if (!cancelled) setMarketMap({});
       }
     };
 
@@ -59,12 +64,13 @@ export function usePortfolioInsights() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [idsParam]);
 
   const enriched = useMemo(() => {
     const grouped = holdings.reduce<Record<string, InsightBaseRow>>((acc, holding) => {
       const market = marketMap[holding.assetId.toLowerCase()] ?? marketMap[holding.symbol.toUpperCase()];
-      const currentPrice = market?.currentPrice ?? holding.avgBuyPrice;
+      if (!market || !Number.isFinite(market.currentPrice) || market.currentPrice <= 0) return acc;
+      const currentPrice = market.currentPrice;
       const pnl = calculatePnl({
         quantity: holding.quantity,
         avgBuyPrice: holding.avgBuyPrice,
@@ -89,6 +95,10 @@ export function usePortfolioInsights() {
       return acc;
     }, {});
 
+    const missingQuotes = holdings.filter((holding) => {
+      const quote = marketMap[holding.assetId.toLowerCase()] ?? marketMap[holding.symbol.toUpperCase()];
+      return !quote || !Number.isFinite(quote.currentPrice) || quote.currentPrice <= 0;
+    }).length;
     const withAllocation = calculateAllocation(Object.values(grouped));
     const summary = calculateSummary(
       withAllocation.map((row) => ({
@@ -125,7 +135,7 @@ export function usePortfolioInsights() {
     const warnings: string[] = [];
     if (concentration >= 55) warnings.push("Alta concentração em um único ativo");
     if (stablecoinRatio < 10) warnings.push("Baixa reserva em stablecoins");
-    if (summary.totalPnlPct <= -15) warnings.push("Drawdown acima de -15%");
+    if (summary.totalPnlPct <= -15) warnings.push("Perda não realizada superior a 15%");
     if (avgChange24h <= -4) warnings.push("Momentum 24h muito negativo");
 
     const healthScore = Math.max(
@@ -141,6 +151,7 @@ export function usePortfolioInsights() {
 
     return {
       rows: withAllocation as InsightHolding[],
+      missingQuotes,
       summary,
       topHolding,
       concentration,
