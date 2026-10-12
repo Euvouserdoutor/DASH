@@ -26,6 +26,7 @@ type TableRow = {
   value: number;
   change24h: number;
   pnl: number;
+  quoted: boolean;
   allocationPct: number;
 };
 
@@ -35,18 +36,25 @@ export function HoldingsTable() {
   const [usingFallback, setUsingFallback] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const holdingIds = useMemo(() => [...new Set(holdings.map((holding) => holding.assetId.toLowerCase()).filter(Boolean))].sort().join(","), [holdings]);
   const [sortBy, setSortBy] = useState<"value" | "pnl" | "change24h" | "allocationPct">("value");
 
   useEffect(() => {
     let cancelled = false;
+    if (!holdingIds) {
+      setMarketMap({});
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
 
     const load = async () => {
       try {
-        const res = await fetch("/api/market", { cache: "no-store" });
+        const res = await fetch("/api/market?ids=" + encodeURIComponent(holdingIds), { cache: "no-store" });
         if (!res.ok) return;
 
         const data = (await res.json()) as { assets?: MarketAsset[]; source?: "coingecko" | "fallback" };
-        if (!data.assets || data.assets.length === 0 || cancelled) return;
+        if (!data.assets || cancelled) return;
 
         const map: Record<string, MarketAsset> = {};
         for (const asset of data.assets) {
@@ -57,7 +65,7 @@ export function HoldingsTable() {
         setMarketMap(map);
         setUsingFallback(data.source !== "coingecko");
       } catch {
-        // keeps fallback mode badge
+        if (!cancelled) { setMarketMap({}); setUsingFallback(true); }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -67,14 +75,15 @@ export function HoldingsTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [holdingIds]);
 
   const rows = useMemo(() => {
     const base = holdings.map((holding) => {
       const bySymbol = marketMap[holding.symbol.toUpperCase()];
       const byId = marketMap[holding.assetId.toLowerCase()];
       const market = bySymbol ?? byId;
-      const currentPrice = market?.currentPrice ?? holding.avgBuyPrice;
+      const quoted = Boolean(market && Number.isFinite(market.currentPrice) && market.currentPrice > 0);
+      const currentPrice = quoted ? market!.currentPrice : 0;
       const pnl = calculatePnl({
         quantity: holding.quantity,
         avgBuyPrice: holding.avgBuyPrice,
@@ -91,9 +100,10 @@ export function HoldingsTable() {
         avgBuy: holding.avgBuyPrice,
         invested: holding.investedAmount ?? holding.quantity * holding.avgBuyPrice,
         currentPrice,
-        value: pnl.currentValue,
-        change24h: market?.priceChange24hPct ?? 0,
-        pnl: pnl.pnlValue,
+        value: quoted ? pnl.currentValue : 0,
+        change24h: quoted ? market?.priceChange24hPct ?? 0 : 0,
+        pnl: quoted ? pnl.pnlValue : 0,
+        quoted,
       };
     });
 
@@ -128,7 +138,7 @@ export function HoldingsTable() {
         <div>
           <h3 className="text-base font-medium">Posições</h3>
           <p className="mt-1 text-xs text-[var(--profit-green)]">
-            {rows.length} ativos · {rows.filter((row) => row.pnl >= 0).length} positivos
+            {rows.length} ativos · {rows.filter((row) => row.quoted && row.pnl >= 0).length} positivos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -194,19 +204,19 @@ export function HoldingsTable() {
                   <td className="tabular-nums px-4 py-3">{fmtCurrency(row.avgBuy)}</td>
                   <td className="tabular-nums px-4 py-3">{fmtCurrency(row.invested)}</td>
                   <td className="tabular-nums px-4 py-3">
-                    <PriceFlash value={row.currentPrice} formattedValue={fmtCurrency(row.currentPrice)} />
+                    {row.quoted ? <PriceFlash value={row.currentPrice} formattedValue={fmtCurrency(row.currentPrice)} /> : <span className="text-[var(--text-muted)]">Indisponível</span>}
                   </td>
                   <td className="tabular-nums px-4 py-3">
-                    <PriceFlash value={row.value} formattedValue={fmtCurrency(row.value)} />
+                    {row.quoted ? <PriceFlash value={row.value} formattedValue={fmtCurrency(row.value)} /> : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <MetricBadge variant={positive24h ? "success" : "danger"}>{fmtPct(row.change24h)}</MetricBadge>
+                    {row.quoted ? <MetricBadge variant={positive24h ? "success" : "danger"}>{fmtPct(row.change24h)}</MetricBadge> : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className={positivePnl ? "text-[var(--profit-green)]" : "text-[var(--loss-red)]"}>
+                    {row.quoted ? <div className={positivePnl ? "text-[var(--profit-green)]" : "text-[var(--loss-red)]"}>
                       <p className="tabular-nums font-medium">{fmtCurrency(row.pnl)}</p>
                       <p className="text-xs">{fmtPct(row.invested > 0 ? (row.pnl / row.invested) * 100 : 0)}</p>
-                    </div>
+                    </div> : "—"}
                   </td>
                   <td className="tabular-nums px-4 py-3">{row.allocationPct.toFixed(2)}%</td>
                   <td className="px-4 py-3">
