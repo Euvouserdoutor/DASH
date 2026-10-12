@@ -3,16 +3,15 @@
 import { useSyncExternalStore } from "react";
 
 import { safeNumber } from "@/lib/formatters";
+import { queueCloudWrite } from "@/lib/client/dash-cloud-sync";
 import type { AlertDirection, PriceAlert } from "@/types/ui";
 
-const STORAGE_KEY = "dash.alerts.v1";
 
 type Snapshot = { alerts: PriceAlert[] };
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
 let state: Snapshot = { alerts: [] };
-let hydrated = false;
 const SERVER_SNAPSHOT: Snapshot = { alerts: [] };
 
 function emit() {
@@ -33,32 +32,18 @@ function getServerSnapshot(): Snapshot {
 }
 
 function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.alerts));
-  } catch {
-    // Storage can be unavailable in private mode or restricted browser contexts.
-  }
+  queueCloudWrite("alerts", state.alerts);
 }
-
 function setAlerts(alerts: PriceAlert[]) {
   state = { alerts };
   persist();
   emit();
 }
-
-function hydrate() {
-  if (hydrated || typeof window === "undefined") return;
-  hydrated = true;
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as PriceAlert[]) : [];
-    state = { alerts: normalizeAlerts(parsed) };
-  } catch {
-    state = { alerts: [] };
-  }
+export function loadAlertsFromCloud(payload: unknown) {
+  state = { alerts: normalizeAlerts(Array.isArray(payload) ? payload as PriceAlert[] : []) };
+  emit();
 }
+export function getAlertsCloudPayload() { return state.alerts; }
 
 function buildId() {
   return `a-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -88,8 +73,6 @@ function normalizeAlerts(alerts: PriceAlert[]) {
 }
 
 export function useAlertsStore() {
-  hydrate();
-
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const addAlert = (input: {
