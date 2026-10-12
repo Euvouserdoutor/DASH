@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from "react";
 
 import { safeNumber } from "@/lib/formatters";
+import { queueCloudWrite } from "@/lib/client/dash-cloud-sync";
 
-const STORAGE_KEY = "dash.settings.v1";
 const DEFAULT_TARGETS: Record<string, number> = { BTC: 40, ETH: 25, SOL: 10, LINK: 5, USDC: 20 };
 const DEFAULT_DRIFT_THRESHOLD = 5;
 
@@ -15,7 +15,6 @@ type DashSettings = {
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let hydrated = false;
 let state: DashSettings = {
   targetAllocations: DEFAULT_TARGETS,
   driftThresholdPct: DEFAULT_DRIFT_THRESHOLD,
@@ -30,38 +29,25 @@ function emit() {
 }
 
 function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Storage can be unavailable in private mode or restricted browser contexts.
-  }
+  queueCloudWrite("settings", state);
 }
-
-function hydrate() {
-  if (hydrated || typeof window === "undefined") return;
-  hydrated = true;
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw) as Partial<DashSettings>;
-    const targetAllocations = parsed.targetAllocations && typeof parsed.targetAllocations === "object"
-      ? Object.entries(parsed.targetAllocations).reduce<Record<string, number>>((acc, [symbol, value]) => {
-          const cleanSymbol = symbol.trim().toUpperCase();
-          if (!cleanSymbol) return acc;
-          acc[cleanSymbol] = Math.max(0, Math.min(100, safeNumber(value)));
-          return acc;
-        }, {})
-      : DEFAULT_TARGETS;
-    const driftThresholdPct = Math.max(0.5, Math.min(30, safeNumber(parsed.driftThresholdPct ?? DEFAULT_DRIFT_THRESHOLD)));
-
-    state = { targetAllocations, driftThresholdPct };
-  } catch {
-    state = { targetAllocations: DEFAULT_TARGETS, driftThresholdPct: DEFAULT_DRIFT_THRESHOLD };
-  }
+export function loadSettingsFromCloud(payload: unknown) {
+  const parsed = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Partial<DashSettings> : {};
+  const targetAllocations = parsed.targetAllocations && typeof parsed.targetAllocations === "object"
+    ? Object.entries(parsed.targetAllocations).reduce<Record<string, number>>((acc, [symbol, value]) => {
+      const name = symbol.trim().toUpperCase();
+      if (name) acc[name] = Math.max(0, Math.min(100, safeNumber(value)));
+      return acc;
+    }, {})
+    : DEFAULT_TARGETS;
+  state = {
+    targetAllocations,
+    driftThresholdPct: Math.max(0.5, Math.min(30, safeNumber(parsed.driftThresholdPct ?? DEFAULT_DRIFT_THRESHOLD))),
+  };
+  emit();
 }
+export function getSettingsCloudPayload() { return state; }
 
 function subscribe(listener: Listener) {
   listeners.add(listener);
@@ -77,7 +63,6 @@ function getServerSnapshot(): DashSettings {
 }
 
 export function useSettingsStore() {
-  hydrate();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const setTargetAllocation = (symbol: string, targetPct: number) => {
