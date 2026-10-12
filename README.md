@@ -53,3 +53,18 @@ O workflow `.github/workflows/ci.yml` executa essas verificações em push/PR. O
 ## Segurança
 
 Para uso em produção com mais de um usuário, primeiro implemente armazenamento por usuário em banco com políticas Supabase RLS, migrações e testes de isolamento, além de monitoramento, backup e verificações de acesso. Não vincule a integração Coinbase à conta de um usuário diferente do `COINBASE_ALLOWED_USER_ID`.
+
+
+## Persistência no Supabase (nova etapa)
+
+Esta versão usa a tabela `public.dash_state_sections` para guardar carteira, alertas, watchlist e configurações por `auth.uid()`. **Não implemente em outro banco que não pertença ao DASH.** O arquivo [database/dash_state_sections.sql](database/dash_state_sections.sql) prepara a tabela e as políticas RLS sem alterar tabelas antigas.
+
+1. Identifique o projeto Supabase dedicado ao DASH e confirme que as variáveis `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` apontam para ele.
+2. Aplique a DDL do arquivo acima nesse projeto e verifique as políticas com os avisos de segurança do Supabase. Teste leitura/escrita com usuário A e isolamento contra usuário B.
+3. Execute `npm ci && npm run type-check && npm run lint && npm run build`.
+4. Com credenciais da conta de teste, abra o DASH e crie uma posição. Confirme que ela permanece após atualizar a página, e que outra conta não a visualiza.
+5. Só então vincule a Vercel e publique a branch de produção.
+
+**Importante:** a interface bloqueia a edição quando o backend não responde, evitando salvar dados financeiros apenas de maneira temporária. Os dados anteriores do `localStorage` não são apagados nem transferidos automaticamente; o botão de importação aparece apenas se o banco estiver vazio e exige confirmação. Revise previamente se os registros antigos pertencem à conta conectada. Os dados de tendência e preferências de alerta que permanecem locais são separados por ID de usuário.
+
+Não use credenciais `service_role` no cliente. O endpoint `/api/state` utiliza a sessão autenticada do Supabase e requer RLS. Erros de gravação são apresentados ao usuário; enquanto ocorrerem, não feche a página presumindo que os dados foram salvos. O modelo atual aplica última gravação por seção e não resolve conflitos simultâneos entre dispositivos, por isso uso multi-dispositivo precisa de testes adicionais antes de ser anunciado como pronto.
