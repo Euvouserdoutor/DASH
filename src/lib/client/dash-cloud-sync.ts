@@ -70,3 +70,5 @@ export function queueCloudWrite(section: StateSection, payload: unknown) {
 export async function flushCloudWrites() {
   await Promise.allSettled([...writes.values()]);
 }
+
+export function getActiveCloudUserId() { return enabled ? activeUserId : ""; }
