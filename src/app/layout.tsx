@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import { DashCloudGate } from "@/components/shell/DashCloudGate";
 
 export const metadata = {
   title: "DASH Crypto Pulse",
@@ -9,8 +10,8 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body><DashCloudGate>{children}</DashCloudGate></body>
     </html>
   );
 }
