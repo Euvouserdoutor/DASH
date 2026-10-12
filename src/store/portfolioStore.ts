@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from "react";
 
 import { safeNumber } from "@/lib/formatters";
+import { queueCloudWrite } from "@/lib/client/dash-cloud-sync";
 
-const STORAGE_KEY = "dash.manual.portfolio.v1";
 
 export type ManualHolding = {
   id: string;
@@ -28,7 +28,6 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 let state: PortfolioSnapshot = { holdings: [] };
-let hydrated = false;
 const SERVER_SNAPSHOT: PortfolioSnapshot = { holdings: [] };
 
 function emit() {
@@ -62,23 +61,13 @@ function parseStoredHoldings(raw: string | null): ManualHolding[] {
 }
 
 function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.holdings));
-  } catch {
-    // Storage can be unavailable in private mode or restricted browser contexts.
-  }
+  queueCloudWrite("portfolio", state.holdings);
 }
-
-function hydrate() {
-  if (hydrated || typeof window === "undefined") return;
-  hydrated = true;
-  try {
-    state = { holdings: parseStoredHoldings(window.localStorage.getItem(STORAGE_KEY)) };
-  } catch {
-    state = { holdings: [] };
-  }
+export function loadPortfolioFromCloud(payload: unknown) {
+  state = { holdings: parseStoredHoldings(JSON.stringify(payload ?? [])) };
+  emit();
 }
+export function getPortfolioCloudPayload() { return state.holdings; }
 
 function setHoldings(holdings: ManualHolding[]) {
   state = { holdings };
@@ -104,8 +93,6 @@ function buildId() {
 }
 
 export function usePortfolioStore() {
-  hydrate();
-
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const addHolding = (input: AddHoldingInput) => {

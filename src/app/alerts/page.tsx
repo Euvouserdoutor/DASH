@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getActiveCloudUserId } from "@/lib/client/dash-cloud-sync";
 
 import { AppShell } from "@/components/shell/AppShell";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -54,7 +55,7 @@ export default function AlertsPage() {
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(SNOOZE_KEY);
+      const raw = window.localStorage.getItem(SNOOZE_KEY + "." + getActiveCloudUserId());
       if (!raw) return;
       const parsed = JSON.parse(raw) as SnoozeMap;
       if (parsed && typeof parsed === "object") setSnoozedUntilById(parsed);
@@ -65,7 +66,7 @@ export default function AlertsPage() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SNOOZE_KEY, JSON.stringify(snoozedUntilById));
+      window.localStorage.setItem(SNOOZE_KEY + "." + getActiveCloudUserId(), JSON.stringify(snoozedUntilById));
     } catch {
       // Storage can be unavailable in private mode or restricted browser contexts.
     }
