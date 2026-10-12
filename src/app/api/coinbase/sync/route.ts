@@ -1,29 +1,20 @@
+import { getCurrentUser } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
-
-import { getCoinbasePermissionStatus } from "@/lib/api/coinbase.server";
-
+import { getCoinbaseBalances } from "@/lib/api/coinbase.server";
+export const runtime = "nodejs";
 export async function POST() {
-  const status = await getCoinbasePermissionStatus();
-
-  if (status.state !== "ready") {
-    return NextResponse.json(
-      {
-        status,
-        synced: false,
-        error: "coinbase_sync_unavailable",
-        message: status.message ?? "Coinbase is not configured for read-only sync.",
-      },
-      { status: status.state === "blocked" ? 403 : 200 },
-    );
+  const user = await getCurrentUser();
+  if (!user || !process.env.COINBASE_ALLOWED_USER_ID || user.id !== process.env.COINBASE_ALLOWED_USER_ID) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
   }
-
-  return NextResponse.json(
-    {
-      status,
-      synced: false,
-      error: "coinbase_sync_not_implemented",
-      message: "Read-only Coinbase sync endpoint is scaffolded, but live account import is not implemented yet.",
-    },
-    { status: 501 },
-  );
+  // Read-only refresh. Never writes portfolio data or places orders.
+  const data = await getCoinbaseBalances();
+  return NextResponse.json({
+    ...data,
+    synced: data.status.state === "ready",
+    message: data.status.message,
+  }, {
+    status: data.status.state === "blocked" ? 503 : 200,
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

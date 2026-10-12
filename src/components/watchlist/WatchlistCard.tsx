@@ -18,24 +18,29 @@ export function WatchlistCard() {
   const [marketMap, setMarketMap] = useState<MarketMap>({});
   const [isLoading, setIsLoading] = useState(true);
 
+  const idsParam = useMemo(() => [...new Set(assets.map((item) => item.id))].sort().join(","), [assets]);
   useEffect(() => {
+    if (!idsParam) { setMarketMap({}); setIsLoading(false); return; }
+    setIsLoading(true);
+    let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch("/api/market", { cache: "no-store" });
+        const res = await fetch("/api/market?ids=" + encodeURIComponent(idsParam), { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { assets?: MarketAsset[] };
         const map: MarketMap = {};
         for (const asset of data.assets ?? []) map[asset.id] = asset;
-        setMarketMap(map);
+        if (!cancelled) setMarketMap(map);
       } catch {
-        setMarketMap({});
+        if (!cancelled) setMarketMap({});
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     load();
-  }, []);
+    return () => { cancelled = true; };
+  }, [idsParam]);
 
   const rows = useMemo(
     () =>
@@ -43,7 +48,7 @@ export function WatchlistCard() {
         const market = marketMap[asset.id];
         return {
           ...asset,
-          currentPrice: market?.currentPrice ?? null,
+          currentPrice: market && market.currentPrice > 0 ? market.currentPrice : null,
           change24h: market?.priceChange24hPct ?? null,
         };
       }),

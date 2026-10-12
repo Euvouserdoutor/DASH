@@ -16,7 +16,7 @@ export default function TransactionsPage() {
     () => holdings
       .map((holding) => ({
         id: holding.id,
-        label: `Aporte em ${holding.name || holding.symbol}`,
+        label: `Posição registrada: ${holding.name || holding.symbol}`,
         date: new Date(holding.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }),
         asset: holding.symbol,
         account: holding.account,

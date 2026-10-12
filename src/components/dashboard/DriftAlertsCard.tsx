@@ -13,7 +13,7 @@ export function DriftAlertsCard() {
   const { targetAllocations, driftThresholdPct } = useSettingsStore();
 
   const triggered = useMemo(() => {
-    return Object.entries(targetAllocations)
+    return (rows.length ? Object.entries(targetAllocations) : [])
       .map(([symbol, target]) => {
         const current = rows.find((row) => row.symbol.toUpperCase() === symbol)?.allocationPct ?? 0;
         const drift = current - target;

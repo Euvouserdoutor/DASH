@@ -25,11 +25,13 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
   const normalizedSymbol = symbol.toUpperCase();
   const { holdings } = usePortfolioStore();
   const [marketMap, setMarketMap] = useState<Record<string, MarketAsset>>({});
+  const [chartPoints, setChartPoints] = useState<number[]>([]);
+  const assetId = holdings.find((item) => item.symbol.toUpperCase() === normalizedSymbol)?.assetId || normalizedSymbol.toLowerCase();
   const [dca, setDca] = useState<DcaState>({
     amount: 250,
     intervalWeeks: 1,
     months: 12,
-    expectedReturnPct: 12,
+    expectedReturnPct: 0,
   });
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
 
     const load = async () => {
       try {
-        const res = await fetch("/api/market", { cache: "no-store" });
+        const res = await fetch("/api/market?ids=" + encodeURIComponent(assetId), { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { assets?: MarketAsset[] };
         if (!data.assets || cancelled) return;
@@ -57,7 +59,16 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [assetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chart/" + encodeURIComponent(assetId) + "?days=30", { cache: "no-store" })
+      .then(async (res) => res.ok ? res.json() as Promise<{ points?: { price: number }[] }> : { points: [] })
+      .then((data) => { if (!cancelled) setChartPoints((data.points ?? []).filter((point) => point.price > 0).map((point) => point.price)); })
+      .catch(() => { if (!cancelled) setChartPoints([]); });
+    return () => { cancelled = true; };
+  }, [assetId]);
 
   const detail = useMemo(() => {
     const related = holdings.filter((holding) => holding.symbol.toUpperCase() === normalizedSymbol);
@@ -66,7 +77,8 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
       ? marketMap[holding.symbol.toUpperCase()] ?? marketMap[holding.assetId.toLowerCase()]
       : marketMap[normalizedSymbol];
 
-    const currentPrice = market?.currentPrice ?? holding?.avgBuyPrice ?? 0;
+    const currentPrice = market && market.currentPrice > 0 ? market.currentPrice : 0;
+    const quoted = currentPrice > 0;
     const quantity = related.reduce((sum, item) => sum + item.quantity, 0);
     const invested = related.reduce((sum, item) => sum + (item.investedAmount ?? item.quantity * item.avgBuyPrice), 0);
     const avgBuy = quantity > 0 ? invested / quantity : 0;
@@ -79,7 +91,7 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
 
     const allRows = holdings.map((item) => {
       const itemMarket = marketMap[item.symbol.toUpperCase()] ?? marketMap[item.assetId.toLowerCase()];
-      const itemPrice = itemMarket?.currentPrice ?? item.avgBuyPrice;
+      const itemPrice = itemMarket && itemMarket.currentPrice > 0 ? itemMarket.currentPrice : 0;
       const itemPnl = calculatePnl({
         quantity: item.quantity,
         avgBuyPrice: item.avgBuyPrice,
@@ -97,12 +109,13 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
       holding,
       name: holding?.name ?? market?.name ?? normalizedSymbol,
       currentPrice,
+      quoted,
       quantity,
       invested,
       avgBuy,
       currentValue: pnl.currentValue,
-      unrealized: pnl.pnlValue,
-      unrealizedPct: invested > 0 ? (pnl.pnlValue / invested) * 100 : 0,
+      unrealized: quoted ? pnl.pnlValue : 0,
+      unrealizedPct: quoted && invested > 0 ? (pnl.pnlValue / invested) * 100 : 0,
       todayPct: market?.priceChange24hPct ?? 0,
       allocationPct,
     };
@@ -151,15 +164,15 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
               <p className="text-sm text-[var(--text-muted)]">Estratégia de {normalizedSymbol} e simulador DCA</p>
             </div>
           </div>
-          <MetricBadge variant={positive ? "success" : "danger"}>{fmtPct(detail.unrealizedPct)} não realizado</MetricBadge>
+          <MetricBadge variant={positive ? "success" : "danger"}>{detail.quoted ? fmtPct(detail.unrealizedPct) + " não realizado" : "Cotação indisponível"}</MetricBadge>
         </div>
       </GlassCard>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile label="Valor atual" value={fmtCurrency(detail.currentValue)} sub={fmtTokenAmount(detail.quantity)} />
+        <MetricTile label="Valor atual" value={detail.quoted ? fmtCurrency(detail.currentValue) : "Indisponível"} sub={fmtTokenAmount(detail.quantity)} />
         <MetricTile label="Total investido" value={fmtCurrency(detail.invested)} sub="Custo de aquisição" />
-        <MetricTile label="Custo médio" value={fmtCurrency(detail.avgBuy)} sub={`Preço ${fmtCurrency(detail.currentPrice)}`} />
-        <MetricTile label="% da carteira" value={`${detail.allocationPct.toFixed(2)}%`} sub={`Hoje ${fmtPct(detail.todayPct)}`} />
+        <MetricTile label="Custo médio" value={fmtCurrency(detail.avgBuy)} sub={detail.quoted ? "Preço " + fmtCurrency(detail.currentPrice) : "Preço indisponível"} />
+        <MetricTile label="% da carteira" value={`${detail.allocationPct.toFixed(2)}%`} sub={detail.quoted ? "Hoje " + fmtPct(detail.todayPct) : "Sem cotação"} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -169,20 +182,23 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
               <h3 className="font-semibold">Detalhe da posição</h3>
               <p className="text-sm text-[var(--text-muted)]">Retorno não realizado, preço médio e exposição.</p>
             </div>
-            <MetricBadge variant={positive ? "success" : "danger"}>{fmtCurrency(detail.unrealized)}</MetricBadge>
+            <MetricBadge variant={positive ? "success" : "danger"}>{detail.quoted ? fmtCurrency(detail.unrealized) : "Indisponível"}</MetricBadge>
           </div>
           <div className="mt-6 h-52 rounded-xl border border-[var(--card-border)] bg-[linear-gradient(180deg,rgba(59,130,246,0.16),transparent)] p-4">
             <div className="flex h-full items-end gap-2">
-              {[42, 48, 46, 55, 61, 58, 68, 73, 70, 78, 83, 88].map((height, idx) => (
-                <div key={idx} className="flex-1 rounded-t bg-[color:var(--accent-violet-blue)]/80" style={{ height: `${height}%` }} />
-              ))}
+              {chartPoints.length > 1 ? chartPoints.filter((_, idx) => idx % Math.max(1, Math.floor(chartPoints.length / 40)) === 0).map((price, idx) => {
+                const low = Math.min(...chartPoints);
+                const high = Math.max(...chartPoints);
+                const height = 10 + ((price - low) / Math.max(1, high - low)) * 90;
+                return <div key={idx} className="flex-1 rounded-t bg-[color:var(--accent-violet-blue)]/80" style={{ height: height + "%" }} />;
+              }) : <p className="self-center text-sm text-[var(--text-muted)]">Histórico indisponível. Sem gráficos simulados.</p>}
             </div>
           </div>
         </GlassCard>
 
         <GlassCard className="p-4">
           <h3 className="font-semibold">Simulador de DCA Estratégico</h3>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Projete aportes recorrentes e novo custo médio.</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Simulação hipotética de aportes; não representa previsão de retorno.</p>
           <div className="mt-4 grid gap-3">
             <NumberField label="Aporte por ciclo" value={dca.amount} onChange={(amount) => setDca((prev) => ({ ...prev, amount }))} />
             <NumberField label="Intervalo em semanas" value={dca.intervalWeeks} onChange={(intervalWeeks) => setDca((prev) => ({ ...prev, intervalWeeks }))} />
@@ -192,8 +208,8 @@ export function CoinDetailWorkspace({ symbol }: CoinDetailWorkspaceProps) {
           <div className="mt-4 grid gap-2 rounded-xl border border-[var(--card-border)] bg-white/[0.03] p-3 text-sm">
             <ResultRow label="Aportes" value={`${dcaResult.payments} ciclos`} />
             <ResultRow label="Total aportado" value={fmtCurrency(dcaResult.totalContribution)} />
-            <ResultRow label="Moedas estimadas" value={fmtTokenAmount(dcaResult.projectedCoins)} />
-            <ResultRow label="Novo custo médio" value={fmtCurrency(dcaResult.blendedAvg)} />
+            <ResultRow label="Moedas estimadas" value={detail.quoted ? fmtTokenAmount(dcaResult.projectedCoins) : "—"} />
+            <ResultRow label="Novo custo médio" value={detail.quoted ? fmtCurrency(dcaResult.blendedAvg) : "—"} />
             <ResultRow label="Valor projetado" value={fmtCurrency(dcaResult.projectedValue)} />
           </div>
         </GlassCard>

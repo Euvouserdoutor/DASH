@@ -35,7 +35,7 @@ export function AlertsOverviewCard() {
 
   const driftTriggered = useMemo(
     () =>
-      Object.entries(targetAllocations).filter(([symbol, target]) => {
+      (rows.length ? Object.entries(targetAllocations) : []).filter(([symbol, target]) => {
         const current = rows.find((row) => row.symbol.toUpperCase() === symbol)?.allocationPct ?? 0;
         return Math.abs(current - target) >= driftThresholdPct;
       }).length,

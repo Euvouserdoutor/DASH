@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
           points: getFallbackAssetChart(id, days),
           source: "fallback",
           warning: "chart_rate_limited",
-          message: "Live chart data is rate limited. Showing local fallback chart.",
+          message: "Live chart data is rate limited. No synthetic chart is displayed.",
         },
         { status: 200 },
       );

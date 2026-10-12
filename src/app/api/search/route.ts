@@ -1,53 +1,19 @@
+
 import { NextRequest, NextResponse } from "next/server";
-
-import { getFallbackMarketAssets, getMarketAssets, RateLimitError } from "@/lib/api/coingecko.server";
-
+import { searchCoinGecko, RateLimitError } from "@/lib/api/coingecko.server";
 export async function GET(req: NextRequest) {
-  const query = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() ?? "";
-  const limitParam = Number(req.nextUrl.searchParams.get("limit") ?? 10);
-  const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(25, limitParam)) : 10;
-
+  const query = (req.nextUrl.searchParams.get("q") ?? "").trim();
+  const rawLimit = Number(req.nextUrl.searchParams.get("limit") ?? 15);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(25, rawLimit)) : 15;
+  if (query.length > 80) return NextResponse.json({ error: "query_too_long" }, { status: 400 });
   try {
-    const assets = await getMarketAssets();
-    const results = query
-      ? assets.filter((asset) =>
-          asset.id.toLowerCase().includes(query) ||
-          asset.symbol.toLowerCase().includes(query) ||
-          asset.name.toLowerCase().includes(query),
-        )
-      : assets;
-
-    return NextResponse.json({ results: results.slice(0, limit), source: "coingecko" }, { status: 200 });
+    const results = await searchCoinGecko(query, limit);
+    return NextResponse.json({ results, source: "coingecko" });
   } catch (error) {
-    const assets = getFallbackMarketAssets();
-    const results = query
-      ? assets.filter((asset) =>
-          asset.id.toLowerCase().includes(query) ||
-          asset.symbol.toLowerCase().includes(query) ||
-          asset.name.toLowerCase().includes(query),
-        )
-      : assets;
-
-    if (error instanceof RateLimitError) {
-      return NextResponse.json(
-        {
-          results: results.slice(0, limit),
-          source: "fallback",
-          warning: "search_rate_limited",
-          message: "Live search is rate limited. Showing local fallback assets.",
-        },
-        { status: 200 },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        results: results.slice(0, limit),
-        source: "fallback",
-        warning: "search_unavailable",
-        message: "Live search is unavailable. Showing local fallback assets.",
-      },
-      { status: 200 },
-    );
+    return NextResponse.json({
+      results: [],
+      source: "fallback",
+      warning: error instanceof RateLimitError ? "search_rate_limited" : "search_unavailable",
+    });
   }
 }

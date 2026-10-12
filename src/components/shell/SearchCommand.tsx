@@ -32,18 +32,20 @@ export function SearchCommand({ triggerClassName = "" }: SearchCommandProps) {
 
   useEffect(() => {
     if (!open) return;
-    const load = async () => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch("/api/market", { cache: "no-store" });
+        const url = "/api/search?q=" + encodeURIComponent(query.trim()) + "&limit=25";
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { assets?: MarketAsset[] };
-        setAssets(data.assets ?? []);
+        const data = (await res.json()) as { results?: MarketAsset[] };
+        if (!cancelled) setAssets(data.results ?? []);
       } catch {
-        setAssets([]);
+        if (!cancelled) setAssets([]);
       }
-    };
-    load();
-  }, [open]);
+    }, query.trim() ? 350 : 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [open, query]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();

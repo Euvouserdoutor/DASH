@@ -3,62 +3,6 @@ import type { MarketAsset, PricePoint } from "@/types/market";
 
 const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 const DEFAULT_IDS = ["bitcoin", "ethereum", "solana", "usd-coin", "chainlink", "near"];
-const FALLBACK_MARKET_ASSETS: MarketAsset[] = [
-  {
-    id: "bitcoin",
-    symbol: "BTC",
-    name: "Bitcoin",
-    currentPrice: 105760,
-    priceChange24hPct: 2.4,
-    marketCap: 2_080_000_000_000,
-    volume24h: 42_000_000_000,
-  },
-  {
-    id: "ethereum",
-    symbol: "ETH",
-    name: "Ethereum",
-    currentPrice: 3075,
-    priceChange24hPct: 1.2,
-    marketCap: 370_000_000_000,
-    volume24h: 18_000_000_000,
-  },
-  {
-    id: "solana",
-    symbol: "SOL",
-    name: "Solana",
-    currentPrice: 141.11,
-    priceChange24hPct: -0.8,
-    marketCap: 76_000_000_000,
-    volume24h: 4_200_000_000,
-  },
-  {
-    id: "usd-coin",
-    symbol: "USDC",
-    name: "USDC",
-    currentPrice: 1,
-    priceChange24hPct: 0.01,
-    marketCap: 32_000_000_000,
-    volume24h: 5_100_000_000,
-  },
-  {
-    id: "chainlink",
-    symbol: "LINK",
-    name: "Chainlink",
-    currentPrice: 14,
-    priceChange24hPct: 0.6,
-    marketCap: 8_900_000_000,
-    volume24h: 540_000_000,
-  },
-  {
-    id: "near",
-    symbol: "NEAR",
-    name: "NEAR Protocol",
-    currentPrice: 3.35,
-    priceChange24hPct: -1.1,
-    marketCap: 4_200_000_000,
-    volume24h: 210_000_000,
-  },
-];
 const SYMBOL_TO_ID: Record<string, string> = {
   btc: "bitcoin",
   eth: "ethereum",
@@ -67,48 +11,41 @@ const SYMBOL_TO_ID: Record<string, string> = {
   link: "chainlink",
   near: "near",
   aero: "aerodrome-finance",
+  bch: "bitcoin-cash",
+  cro: "cronos",
+  celo: "celo",
+  zora: "zora",
+  avnt: "avantis",
+  usdt: "tether",
 };
 
 export class RateLimitError extends Error {}
 
-export function getFallbackMarketAssets(ids: string[] = DEFAULT_IDS): MarketAsset[] {
-  const wanted = new Set(ids.map((id) => id.toLowerCase()));
-  return FALLBACK_MARKET_ASSETS.filter((asset) => wanted.has(asset.id)).map((asset) => ({ ...asset }));
+// Intentionally never manufacture prices or charts when the provider is unavailable.
+export function getFallbackMarketAssets(_ids: string[] = DEFAULT_IDS): MarketAsset[] {
+  void _ids;
+  return [];
 }
 
-export function getFallbackPrices(ids: string[] = DEFAULT_IDS): Record<string, number> {
-  const prices: Record<string, number> = {};
-  for (const asset of getFallbackMarketAssets(ids)) {
-    prices[asset.id] = asset.currentPrice;
-  }
-  return prices;
+export function getFallbackPrices(_ids: string[] = DEFAULT_IDS): Record<string, number> {
+  void _ids;
+  return {};
 }
 
-export function getFallbackPricesForInput(input: { ids?: string[]; symbols?: string[] }): Record<string, number> {
-  const fromSymbols = (input.symbols ?? [])
-    .map((symbol) => SYMBOL_TO_ID[symbol.toLowerCase()])
-    .filter(Boolean);
-  const targetIds = Array.from(new Set([...(input.ids ?? []), ...fromSymbols]));
-  return getFallbackPrices(targetIds.length > 0 ? targetIds : DEFAULT_IDS);
+export function getFallbackPricesForInput(_input: { ids?: string[]; symbols?: string[] }): Record<string, number> {
+  void _input;
+  return {};
 }
 
-export function getFallbackAssetChart(id: string, days: "1" | "7" | "30" = "1"): PricePoint[] {
-  const asset = FALLBACK_MARKET_ASSETS.find((item) => item.id === id) ?? FALLBACK_MARKET_ASSETS[0];
-  const pointCount = days === "30" ? 30 : days === "7" ? 14 : 12;
-  const intervalMs = days === "1" ? 2 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-  const now = Date.now();
+export function getFallbackAssetChart(_id: string, _days: "1" | "7" | "30" = "1"): PricePoint[] {
+  void _id;
+  void _days;
+  return [];
+}
 
-  return Array.from({ length: pointCount }, (_, index) => {
-    const distanceFromEnd = pointCount - index - 1;
-    const wave = Math.sin(index / 2) * 0.012;
-    const drift = (index - pointCount / 2) * 0.003;
-    const price = asset.currentPrice * (1 + wave + drift);
-
-    return {
-      timestamp: new Date(now - distanceFromEnd * intervalMs).toISOString(),
-      price: Number(price.toFixed(2)),
-    };
-  });
+export function normalizeCoinGeckoId(value: string): string {
+  const clean = value.trim().toLowerCase();
+  return SYMBOL_TO_ID[clean] ?? clean;
 }
 
 async function coingeckoFetch<T>(path: string, revalidateSeconds: number): Promise<T> {
@@ -220,4 +157,29 @@ export async function getAssetChart(id: string, days: "1" | "7" | "30" = "1"): P
 
   setCache(cacheKey, points, 300_000);
   return points;
+}
+
+
+type CoinSearchResponse = {
+  coins?: Array<{ id: string; symbol: string; name: string; thumb?: string }>;
+};
+
+export async function searchCoinGecko(query: string, limit = 15): Promise<MarketAsset[]> {
+  const value = query.trim().slice(0, 80);
+  if (!value) return getMarketAssets();
+  const cached = getCache<MarketAsset[]>("coingecko:search:" + value.toLowerCase());
+  if (cached) return cached.slice(0, limit);
+  const response = await coingeckoFetch<CoinSearchResponse>(
+    "/search?query=" + encodeURIComponent(value), 120,
+  );
+  const coins = (response.coins ?? []).slice(0, 25).map((coin) => ({
+    id: coin.id,
+    symbol: coin.symbol.toUpperCase(),
+    name: coin.name,
+    imageUrl: coin.thumb,
+    currentPrice: 0,
+    priceChange24hPct: 0,
+  }));
+  setCache("coingecko:search:" + value.toLowerCase(), coins, 120_000);
+  return coins.slice(0, limit);
 }
