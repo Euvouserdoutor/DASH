@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// Dashboard pages are public. API endpoints remain protected by Supabase Auth.
+// Public pages and strictly allowlisted market-data GETs; private APIs use Supabase Auth.
 export async function proxy(request: NextRequest) {
-  if (!request.nextUrl.pathname.startsWith("/api/")) {
+  const path = request.nextUrl.pathname;
+  // Only read-only market information is public. All other APIs retain Supabase Auth.
+  const publicMarketRequest =
+    request.method === "GET" &&
+    (path === "/api/market" || /^\/api\/chart\/(bitcoin|ethereum|solana)$/.test(path));
+
+  if (publicMarketRequest || !path.startsWith("/api/")) {
     return NextResponse.next({ request });
   }
 
