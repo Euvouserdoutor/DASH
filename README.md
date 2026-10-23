@@ -1,6 +1,6 @@
 # DASH Crypto Pulse
 
-Painel privado de acompanhamento financeiro e criptomoedas. Next.js (App Router), TypeScript, Tailwind CSS e Supabase Auth.
+Painel de acompanhamento financeiro e criptomoedas com páginas públicas e APIs privadas protegidas por Supabase Auth. Next.js (App Router), TypeScript e Tailwind CSS.
 
 ## Executar localmente
 
@@ -12,7 +12,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Acesse `http://localhost:3000`. Configure o Supabase e crie o usuário no provedor de autenticação antes de entrar. A rota `/register` não cria novos usuários.
+Acesse `http://localhost:3000`: a página inicial abre o painel sem solicitar login; a rota `/login` redireciona para `/overview`. As APIs continuam exigindo sessão Supabase válida. A rota `/register` não cria novos usuários.
 
 ## Variáveis de ambiente
 
@@ -34,7 +34,7 @@ A Coinbase permanece indisponível até que **todas** as variáveis da integraç
 - Quando a cotação não está disponível, o ativo é marcado como indisponível e não entra nos indicadores de patrimônio/P&L. Não existem preços estimados nem gráficos fictícios.
 - A Coinbase consulta permissões na API, gera JWT de curta duração por requisição e lê saldos paginados. O painel mostra esses saldos **separadamente**, sem misturar posições manuais e causar duplicidade.
 - **Não há operações de compra, venda ou transferência**, mesmo em caso de credenciais privilegiadas: as chaves com tais permissões são recusadas.
-- A autenticação impede usuários não logados de consultar APIs. Os endpoints de Coinbase exigem ainda `COINBASE_ALLOWED_USER_ID`.
+- As páginas de visualização são acessíveis sem login; a autenticação continua impedindo usuários não logados de consultar APIs. Os endpoints de Coinbase exigem ainda `COINBASE_ALLOWED_USER_ID`.
 - **Limitação atual:** posições manuais, alertas, watchlist, metas e histórico são mantidos no localStorage do navegador. Não há sincronização multiusuário com o banco. Não utilize navegadores compartilhados para dados financeiros privados.
 - A tela de análise usa dados disponíveis e histórico salvo localmente, não um extrato contábil.
 - Médias e bases de custo manuais não foram reconciliadas com extratos históricos da Coinbase. Esse trabalho exige importar e validar transações reais antes de apresentar valor contábil auditável.
