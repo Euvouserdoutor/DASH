@@ -40,14 +40,6 @@ export function Topbar({ title = "Painel" }: TopbarProps) {
         triggerClassName="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black transition hover:bg-white/90"
       />
 
-      <form action="/auth/logout" method="post">
-        <button
-          type="submit"
-          className="rounded-md border border-[var(--card-border)] px-3 py-1.5 text-xs text-[var(--text-muted)] transition hover:bg-white/10 hover:text-[var(--text-primary)]"
-        >
-          Sair
-        </button>
-      </form>
     </header>
   );
 }
