@@ -77,6 +77,7 @@ type CoinGeckoMarket = {
   market_cap?: number;
   total_volume?: number;
   last_updated?: string;
+  sparkline_in_7d?: { price?: number[] };
 };
 
 export async function getMarketAssets(ids: string[] = DEFAULT_IDS): Promise<MarketAsset[]> {
@@ -91,7 +92,7 @@ export async function getMarketAssets(ids: string[] = DEFAULT_IDS): Promise<Mark
     order: "market_cap_desc",
     per_page: String(uniqueIds.length),
     page: "1",
-    sparkline: "false",
+    sparkline: "true",
     price_change_percentage: "24h",
   });
 
@@ -106,6 +107,8 @@ export async function getMarketAssets(ids: string[] = DEFAULT_IDS): Promise<Mark
     marketCap: Number(asset.market_cap ?? 0),
     volume24h: Number(asset.total_volume ?? 0),
     updatedAt: asset.last_updated,
+    sparkline7d: (asset.sparkline_in_7d?.price ?? [])
+      .map(Number).filter((price) => Number.isFinite(price) && price > 0),
   }));
 
   setCache(cacheKey, normalized, 120_000);
