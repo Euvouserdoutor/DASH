@@ -16,11 +16,18 @@ export function CoinbaseSyncCard() {
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [accessRestricted, setAccessRestricted] = useState(false);
   async function refresh(endpoint = "/api/coinbase/balances", method = "GET") {
     setBusy(true);
     try {
       const res = await fetch(endpoint, { method, cache: "no-store" });
       const data = (await res.json()) as Payload;
+      if (res.status === 401 || res.status === 403) {
+        setAccessRestricted(true);
+        setMessage("Os saldos privados da Coinbase exigem uma sessão autorizada; não são exibidos no painel público.");
+        return;
+      }
+      setAccessRestricted(false);
       setStatus(data.status ?? null);
       setBalances(res.ok ? data.balances ?? [] : []);
       setSyncedAt(res.ok ? data.syncedAt ?? null : null);
@@ -37,9 +44,15 @@ export function CoinbaseSyncCard() {
   useEffect(() => {
     let active = true;
     fetch("/api/coinbase/balances", { cache: "no-store" })
-      .then(async (res) => ({ ok: res.ok, data: (await res.json()) as Payload }))
-      .then(({ ok, data }) => {
+      .then(async (res) => ({ ok: res.ok, code: res.status, data: (await res.json()) as Payload }))
+      .then(({ ok, code, data }) => {
         if (!active) return;
+        if (code === 401 || code === 403) {
+          setAccessRestricted(true);
+          setMessage("Informações privadas da Coinbase indisponíveis no acesso público.");
+          return;
+        }
+        setAccessRestricted(false);
         setStatus(data.status ?? null);
         setBalances(ok ? data.balances ?? [] : []);
         setSyncedAt(ok ? data.syncedAt ?? null : null);
@@ -57,13 +70,13 @@ export function CoinbaseSyncCard() {
           <p className="mt-1 text-xs text-[var(--text-muted)]">Posições da corretora separadas da carteira manual para evitar contagem duplicada.</p>
         </div>
         <MetricBadge variant={connected ? "success" : status?.state === "blocked" ? "danger" : "warning"}>
-          {connected ? "Conectada" : status?.state === "blocked" ? "Bloqueada" : "Não configurada"}
+          {accessRestricted ? "Acesso restrito" : connected ? "Conectada" : status?.state === "blocked" ? "Bloqueada" : "Não configurada"}
         </MetricBadge>
       </div>
       <p className="mt-3 text-xs text-[var(--text-muted)]">{message || "Verificando conexão..."}</p>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-[var(--text-muted)]">{syncedAt ? "Leitura: " + new Date(syncedAt).toLocaleString("pt-BR") : "Sem leitura confirmada"}</span>
-        <button type="button" disabled={busy} onClick={() => void refresh("/api/coinbase/sync", "POST")}
+        <button type="button" disabled={busy || accessRestricted} onClick={() => void refresh("/api/coinbase/sync", "POST")}
           className="rounded-lg border border-[var(--card-border)] px-3 py-2 text-xs disabled:opacity-50">
           {busy ? "Consultando..." : "Atualizar saldos"}
         </button>
