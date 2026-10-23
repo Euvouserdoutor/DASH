@@ -13,5 +13,7 @@ export type MarketAsset = {
   marketCap?: number;
   volume24h?: number;
   sparkline?: PricePoint[];
+  // CoinGecko 7d price samples (provider does not include sample timestamps).
+  sparkline7d?: number[];
   updatedAt?: string;
 };
